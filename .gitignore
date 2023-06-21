@@ -1,0 +1,9 @@
+
+# ignore Python temporary files
+*.pyc
+.ipynb_checkpoints/
+__pycache__/
+
+# ignore compressed files
+*.zip
+*.tar.gz
