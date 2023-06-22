@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from scipy import sparse
 import scipy.sparse.linalg as spla
-from fermionic_operators import construct_fermionic_operators, orbital_create_op, orbital_annihil_op
+from fermionic_operators import construct_fermionic_operators, orbital_create_op, orbital_annihil_op, orbital_number_op
 from util import crandn
 
 
@@ -51,7 +51,7 @@ class TestCommutators(unittest.TestCase):
         x = crandn(5, rng)
         x /= np.linalg.norm(x)
         a = orbital_annihil_op(x)
-        n = a.conj().T @ a
+        n = orbital_number_op(x)
         self.assertAlmostEqual(spla.norm(comm(n, a.conj().T) - a.conj().T), 0)
         self.assertAlmostEqual(spla.norm(comm(a, n) - a), 0)
 

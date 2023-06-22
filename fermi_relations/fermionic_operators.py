@@ -55,6 +55,14 @@ def orbital_annihil_op(x):
     return orbital_create_op(x).conj().T
 
 
+def orbital_number_op(x):
+    """
+    Fermionic "orbital" number operator.
+    """
+    c = orbital_create_op(x)
+    return c @ c.conj().T
+
+
 def total_number_op(nmodes: int):
     """
     Total number operator on full Fock space.

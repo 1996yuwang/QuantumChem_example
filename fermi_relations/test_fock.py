@@ -1,10 +1,10 @@
 import unittest
 import numpy as np
-import scipy.sparse.linalg as spla
 from scipy.linalg import expm
-from scipy import sparse
 from scipy.stats import unitary_group
-from fermionic_operators import construct_fermionic_operators, total_number_op
+import scipy.sparse.linalg as spla
+from scipy import sparse
+from fermionic_operators import construct_fermionic_operators, orbital_number_op, total_number_op
 from fock import slater_determinant, fock_orbital_base_change
 from util import crandn
 
@@ -25,22 +25,31 @@ class TestFock(unittest.TestCase):
         Test Slater determinant construction by simulating
         quantum time evolution of a Slater determinant in two alternative ways.
         """
+        rng = np.random.default_rng()
+
         # number of modes
         nmodes = 7
         # number of particles
         N = 3
         # random orthonormal states
-        phi = unitary_group.rvs(nmodes)[:, :N]
+        base = unitary_group.rvs(nmodes, random_state=rng)
+        orb = base[:, :N]
+
         # create Slater determinant
-        psi = slater_determinant(phi)
+        psi = slater_determinant(orb)
         # must be normalized
         self.assertAlmostEqual(np.linalg.norm(psi), 1, delta=1e-13)
         # must be eigenstate of number operator
         self.assertAlmostEqual(np.linalg.norm(
             total_number_op(nmodes) @ psi - N*psi), 0, delta=1e-13)
+        for i in range(nmodes):
+            # number operator of an individual mode
+            n = orbital_number_op(base[:, i])
+            self.assertAlmostEqual(np.linalg.norm(
+                n @ psi - (1 if i < N else 0) * psi), 0, delta=1e-13)
 
         # random single-particle Hamiltonian
-        h = crandn((nmodes, nmodes))
+        h = crandn((nmodes, nmodes), rng)
         h = 0.5*(h + h.conj().T)
         # Hamiltonian on full Fock space
         clist, alist, _ = construct_fermionic_operators(nmodes)
@@ -48,13 +57,13 @@ class TestFock(unittest.TestCase):
 
         # energy expectation value
         en = np.vdot(psi, H.toarray() @ psi)
-        self.assertAlmostEqual(en, np.trace(phi.conj().T @ h @ phi))
+        self.assertAlmostEqual(en, np.trace(orb.conj().T @ h @ orb))
 
         # time-evolved state
         psi_t = expm(-1j*H.toarray()) @ psi
         # alternative construction: time-evolve single-particle states individually
-        St = expm(-1j*h) @ phi
-        psi_t_alt = slater_determinant(St)
+        orb_t = expm(-1j*h) @ orb
+        psi_t_alt = slater_determinant(orb_t)
         # compare
         self.assertAlmostEqual(np.linalg.norm(psi_t_alt - psi_t), 0, delta=1e-13)
 
@@ -63,6 +72,8 @@ class TestFock(unittest.TestCase):
         Test matrix representation of single-particle base change
         on overall Fock space.
         """
+        rng = np.random.default_rng()
+
         # number of modes
         nmodes = 5
 
@@ -72,7 +83,7 @@ class TestFock(unittest.TestCase):
         self.assertEqual(spla.norm(UF - sparse.identity(2**nmodes)), 0)
 
         # random orthonormal states
-        U = unitary_group.rvs(nmodes)
+        U = unitary_group.rvs(nmodes, random_state=rng)
         self.assertAlmostEqual(np.linalg.norm(U.conj().T @ U - np.identity(nmodes)), 0, delta=1e-13)
 
         UF = fock_orbital_base_change(U)
@@ -92,11 +103,13 @@ class TestFock(unittest.TestCase):
         """
         Numerically verify Thouless' theorem.
         """
+        rng = np.random.default_rng()
+
         # number of modes
         nmodes = 5
 
         # random single-particle base change matrix as matrix exponential
-        h = crandn((nmodes, nmodes))
+        h = crandn((nmodes, nmodes), rng)
         h = 0.5*(h + h.conj().T)
         U = expm(-1j*h)
 
@@ -109,6 +122,38 @@ class TestFock(unittest.TestCase):
 
         # compare
         self.assertTrue(np.allclose(UF, UF_ref.toarray()))
+
+    def test_skew_number_op(self):
+        """
+        Test action of a number operator w.r.t. a non-orthogonal basis state on a Slater determinant.
+        """
+        rng = np.random.default_rng()
+
+        # number of modes
+        nmodes = 7
+        # number of particles
+        N = 3
+        # random orthonormal states
+        base = unitary_group.rvs(nmodes, random_state=rng)
+        orb = base[:, :N]
+
+        # create Slater determinant
+        psi = slater_determinant(orb)
+
+        # non-orthogonal state
+        x = crandn(nmodes, rng)
+        x /= np.linalg.norm(x)
+        n = orbital_number_op(x)
+
+        # manually construct sum of Slater determinants by projecting one orbital at a time onto 'x'
+        n_psi = 0
+        for i in range(N):
+            n_orbs_i = np.concatenate((orb[:, :i],
+                                       np.reshape(np.vdot(x, orb[:, i]) * x, (nmodes, 1)),
+                                       orb[:, i+1:]), axis=1)
+            n_psi += slater_determinant(n_orbs_i)
+        # compare
+        self.assertTrue(np.allclose(n_psi, n @ psi))
 
 
 if __name__ == '__main__':
