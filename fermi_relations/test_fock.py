@@ -110,7 +110,8 @@ class TestFock(unittest.TestCase):
 
         # random single-particle base change matrix as matrix exponential
         h = crandn((nmodes, nmodes), rng)
-        h = 0.5*(h + h.conj().T)
+        # identity even holds if 'h' is not Hermitian (and 'U' not unitary)
+        # h = 0.5*(h + h.conj().T)
         U = expm(-1j*h)
 
         clist, alist, _ = construct_fermionic_operators(nmodes)
